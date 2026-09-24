@@ -27,6 +27,21 @@ jobs:
           echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           echo "APP_BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
+      - name: Import stable signing identity
+        env:
+          LOCAL_SIGNING_P12: ${{ secrets.LOCAL_SIGNING_P12 }}
+          LOCAL_SIGNING_PASSWORD: ${{ secrets.LOCAL_SIGNING_PASSWORD }}
+        run: |
+          mkdir -p work
+          printf '%s' "$LOCAL_SIGNING_P12" | base64 --decode > work/command-whisper-signing.p12
+          printf '%s' "$LOCAL_SIGNING_PASSWORD" > work/command-whisper-signing-password
+          security create-keychain -p "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
+          security unlock-keychain -p "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
+          security import work/command-whisper-signing.p12 -f pkcs12 -k work/cw-build.keychain-db -P "$LOCAL_SIGNING_PASSWORD" -T /usr/bin/codesign
+          openssl pkcs12 -in work/command-whisper-signing.p12 -clcerts -nokeys -passin "pass:$LOCAL_SIGNING_PASSWORD" -out work/command-whisper-signing.crt
+          security add-trusted-cert -r trustRoot -p codeSign -k work/cw-build.keychain-db work/command-whisper-signing.crt
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
+
       - name: Test and package
         run: |
           ./scripts/test.sh

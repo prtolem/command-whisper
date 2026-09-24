@@ -20,6 +20,7 @@ static NSError *CWError(NSInteger code, NSString *message) {
 @property (nonatomic, copy) void (^onHoldEnded)(void);
 @property (nonatomic, copy) void (^onShortcut)(void);
 - (BOOL)start;
+- (BOOL)isRunning;
 - (void)requestPermission;
 @end
 
@@ -47,7 +48,10 @@ static CGEventRef CWEventTapCallback(CGEventTapProxy proxy, CGEventType type, CG
 }
 
 - (BOOL)start {
-    if (_eventTap) return YES;
+    if (_eventTap) {
+        if (!CGEventTapIsEnabled(_eventTap)) CGEventTapEnable(_eventTap, true);
+        return CGEventTapIsEnabled(_eventTap);
+    }
     CGEventMask mask = CGEventMaskBit(kCGEventFlagsChanged) | CGEventMaskBit(kCGEventKeyDown);
     _eventTap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
                                  mask, CWEventTapCallback, (__bridge void *)self);
@@ -56,6 +60,10 @@ static CGEventRef CWEventTapCallback(CGEventTapProxy proxy, CGEventType type, CG
     CFRunLoopAddSource(CFRunLoopGetMain(), _runLoopSource, kCFRunLoopCommonModes);
     CGEventTapEnable(_eventTap, true);
     return YES;
+}
+
+- (BOOL)isRunning {
+    return _eventTap != NULL && CGEventTapIsEnabled(_eventTap);
 }
 
 - (void)requestPermission {
@@ -540,6 +548,7 @@ typedef NS_ENUM(NSInteger, CWMode) { CWModeReady, CWModeListening, CWModeTranscr
     CWMode _mode;
     NSString *_unavailableReason;
     SPUStandardUpdaterController *_updaterController;
+    NSTimer *_permissionTimer;
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -566,12 +575,22 @@ typedef NS_ENUM(NSInteger, CWMode) { CWModeReady, CWModeListening, CWModeTranscr
         typeof(self) self = weakSelf;
         [self->_hud setLevel:level];
     };
-    if ([self permissionsReady]) {
-        if (![_monitor start]) [self setUnavailable:@"Нужен доступ к клавиатуре"];
-    } else {
-        [self setUnavailable:@"Нужно закончить настройку"];
+    [NSWorkspace.sharedWorkspace.notificationCenter addObserver:self
+                                                       selector:@selector(workspaceDidWake:)
+                                                           name:NSWorkspaceDidWakeNotification
+                                                         object:nil];
+    [self refreshGlobalHotkey];
+    if (![self essentialPermissionsReady]) {
         dispatch_async(dispatch_get_main_queue(), ^{ [weakSelf showSetupAssistant]; });
     }
+}
+
+- (void)applicationDidBecomeActive:(NSNotification *)notification {
+    [self refreshGlobalHotkey];
+}
+
+- (void)workspaceDidWake:(NSNotification *)notification {
+    [self refreshGlobalHotkey];
 }
 
 - (void)rebuildMenu {
@@ -615,11 +634,40 @@ typedef NS_ENUM(NSInteger, CWMode) { CWModeReady, CWModeListening, CWModeTranscr
 - (void)setMode:(CWMode)mode { _mode = mode; _unavailableReason = nil; [self rebuildMenu]; }
 - (void)setUnavailable:(NSString *)reason { _mode = CWModeUnavailable; _unavailableReason = reason; [self rebuildMenu]; }
 
-- (BOOL)permissionsReady {
+- (BOOL)essentialPermissionsReady {
     return [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusAuthorized
         && SFSpeechRecognizer.authorizationStatus == SFSpeechRecognizerAuthorizationStatusAuthorized
-        && CGPreflightListenEventAccess()
-        && AXIsProcessTrusted();
+        && CGPreflightListenEventAccess();
+}
+
+- (void)refreshGlobalHotkey {
+    BOOL inputAllowed = CGPreflightListenEventAccess();
+    BOOL monitorRunning = inputAllowed && [_monitor start];
+    BOOL speechReady = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeAudio] == AVAuthorizationStatusAuthorized
+        && SFSpeechRecognizer.authorizationStatus == SFSpeechRecognizerAuthorizationStatusAuthorized;
+
+    if (monitorRunning && speechReady) {
+        [_permissionTimer invalidate];
+        _permissionTimer = nil;
+        if (_mode == CWModeUnavailable) [self setMode:CWModeReady];
+        return;
+    }
+
+    if (_mode != CWModeListening && _mode != CWModeTranscribing) {
+        [self setUnavailable:inputAllowed ? @"Нужен доступ к микрофону и речи" : @"Нужен мониторинг ввода"];
+    }
+    if (!_permissionTimer) {
+        _permissionTimer = [NSTimer timerWithTimeInterval:1.0
+                                                  target:self
+                                                selector:@selector(permissionTimerFired:)
+                                                userInfo:nil
+                                                 repeats:YES];
+        [NSRunLoop.mainRunLoop addTimer:_permissionTimer forMode:NSRunLoopCommonModes];
+    }
+}
+
+- (void)permissionTimerFired:(NSTimer *)timer {
+    [self refreshGlobalHotkey];
 }
 
 - (NSString *)permissionSummary {
@@ -635,7 +683,7 @@ typedef NS_ENUM(NSInteger, CWMode) { CWModeReady, CWModeListening, CWModeTranscr
     [NSApp activateIgnoringOtherApps:YES];
     NSAlert *alert = [NSAlert new];
     alert.messageText = @"Настроим Command Whisper";
-    alert.informativeText = [NSString stringWithFormat:@"Для удержания правого ⌘ и вставки текста нужны четыре системных разрешения.\n\n%@\n\nПосле их выдачи перезапусти приложение.", [self permissionSummary]];
+    alert.informativeText = [NSString stringWithFormat:@"Для удержания правого ⌘ и вставки текста нужны системные разрешения.\n\n%@\n\nВозвращайся в любое приложение — перезапуск больше не нужен.", [self permissionSummary]];
     [alert addButtonWithTitle:@"Выдать разрешения"];
     [alert addButtonWithTitle:@"Позже"];
     if ([alert runModal] == NSAlertFirstButtonReturn) [self requestPermissions:nil];
@@ -695,10 +743,11 @@ typedef NS_ENUM(NSInteger, CWMode) { CWModeReady, CWModeListening, CWModeTranscr
     __weak typeof(self) weakSelf = self;
     [_transcriber requestPermissions:^(BOOL granted) {
         typeof(self) self = weakSelf;
-        if (granted && self && [self->_monitor start]) [self setMode:CWModeReady];
+        if (self) [self refreshGlobalHotkey];
     }];
     [_monitor requestPermission];
     [_injector requestPermission];
+    [self refreshGlobalHotkey];
 }
 
 - (void)checkForUpdates:(id)sender {

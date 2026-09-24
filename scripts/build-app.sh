@@ -5,8 +5,8 @@ ROOT_DIR="${0:A:h:h}"
 APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 BUILD_DIR="$ROOT_DIR/work/build"
 SPARKLE_DIR="$($ROOT_DIR/scripts/fetch-sparkle.sh)"
-APP_VERSION="${APP_VERSION:-0.3.0}"
-APP_BUILD="${APP_BUILD:-3}"
+APP_VERSION="${APP_VERSION:-0.3.1}"
+APP_BUILD="${APP_BUILD:-4}"
 
 cd "$ROOT_DIR"
 mkdir -p "$BUILD_DIR"
@@ -33,12 +33,37 @@ ditto "$SPARKLE_DIR/Sparkle.framework" "$APP_DIR/Contents/Frameworks/Sparkle.fra
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$APP_DIR/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$APP_DIR/Contents/Info.plist"
 
-SIGN_IDENTITY="${SIGN_IDENTITY:--}"
+LOCAL_SIGNING_IDENTITY="Command Whisper Local Signing"
+LOCAL_KEYCHAIN="$ROOT_DIR/work/cw-build.keychain-db"
+SIGN_KEYCHAIN="${SIGN_KEYCHAIN:-}"
+if [[ -f "$LOCAL_KEYCHAIN" && -f "$ROOT_DIR/work/command-whisper-signing-password" ]]; then
+    security unlock-keychain -p "$(<"$ROOT_DIR/work/command-whisper-signing-password")" "$LOCAL_KEYCHAIN" 2>/dev/null || true
+fi
+if [[ -z "${SIGN_IDENTITY:-}" ]]; then
+    if [[ -f "$LOCAL_KEYCHAIN" ]] && security find-identity -v -p codesigning "$LOCAL_KEYCHAIN" | grep -Fq "\"$LOCAL_SIGNING_IDENTITY\""; then
+        SIGN_IDENTITY="$LOCAL_SIGNING_IDENTITY"
+        SIGN_KEYCHAIN="$LOCAL_KEYCHAIN"
+        if [[ -f "$ROOT_DIR/work/command-whisper-signing-password" ]]; then
+            security unlock-keychain -p "$(<"$ROOT_DIR/work/command-whisper-signing-password")" "$LOCAL_KEYCHAIN"
+        fi
+    elif security find-identity -v -p codesigning | grep -Fq "\"$LOCAL_SIGNING_IDENTITY\""; then
+        SIGN_IDENTITY="$LOCAL_SIGNING_IDENTITY"
+    else
+        SIGN_IDENTITY="-"
+    fi
+fi
+KEYCHAIN_ARGS=()
+if [[ -n "$SIGN_KEYCHAIN" ]]; then
+    KEYCHAIN_ARGS=(--keychain "$SIGN_KEYCHAIN")
+fi
 if [[ "$SIGN_IDENTITY" == "-" ]]; then
     codesign --force --deep --sign - "$APP_DIR/Contents/Frameworks/Sparkle.framework"
     codesign --force --deep --sign - --identifier ru.prtolem.CommandWhisper "$APP_DIR"
+elif [[ "$SIGN_IDENTITY" == Developer\ ID\ Application:* ]]; then
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "${KEYCHAIN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "${KEYCHAIN_ARGS[@]}" --identifier ru.prtolem.CommandWhisper "$APP_DIR"
 else
-    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-    codesign --force --deep --options runtime --timestamp --sign "$SIGN_IDENTITY" --identifier ru.prtolem.CommandWhisper "$APP_DIR"
+    codesign --force --deep --sign "$SIGN_IDENTITY" "${KEYCHAIN_ARGS[@]}" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+    codesign --force --deep --sign "$SIGN_IDENTITY" "${KEYCHAIN_ARGS[@]}" --identifier ru.prtolem.CommandWhisper "$APP_DIR"
 fi
 echo "$APP_DIR"
