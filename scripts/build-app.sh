@@ -5,8 +5,8 @@ ROOT_DIR="${0:A:h:h}"
 APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 BUILD_DIR="$ROOT_DIR/work/build"
 SPARKLE_DIR="$($ROOT_DIR/scripts/fetch-sparkle.sh)"
-APP_VERSION="${APP_VERSION:-0.3.2}"
-APP_BUILD="${APP_BUILD:-5}"
+APP_VERSION="${APP_VERSION:-0.3.3}"
+APP_BUILD="${APP_BUILD:-6}"
 
 cd "$ROOT_DIR"
 mkdir -p "$BUILD_DIR"
@@ -40,18 +40,23 @@ if [[ -f "$LOCAL_KEYCHAIN" && -f "$ROOT_DIR/work/command-whisper-signing-passwor
     security unlock-keychain -p "$(<"$ROOT_DIR/work/command-whisper-signing-password")" "$LOCAL_KEYCHAIN" 2>/dev/null || true
 fi
 if [[ -z "${SIGN_IDENTITY:-}" ]]; then
-    if [[ -f "$LOCAL_KEYCHAIN" ]] && security find-identity -v -p codesigning "$LOCAL_KEYCHAIN" | grep -Fq "\"$LOCAL_SIGNING_IDENTITY\""; then
-        SIGN_IDENTITY="$LOCAL_SIGNING_IDENTITY"
+    LOCAL_IDENTITY_HASH=""
+    if [[ -f "$LOCAL_KEYCHAIN" ]]; then
+        LOCAL_IDENTITY_HASH="$(security find-identity -v -p codesigning "$LOCAL_KEYCHAIN" 2>/dev/null | awk -v name="$LOCAL_SIGNING_IDENTITY" 'index($0, "\"" name "\"") { print $2; exit }')"
+    fi
+    if [[ -n "$LOCAL_IDENTITY_HASH" ]]; then
+        SIGN_IDENTITY="$LOCAL_IDENTITY_HASH"
         SIGN_KEYCHAIN="$LOCAL_KEYCHAIN"
         if [[ -f "$ROOT_DIR/work/command-whisper-signing-password" ]]; then
             security unlock-keychain -p "$(<"$ROOT_DIR/work/command-whisper-signing-password")" "$LOCAL_KEYCHAIN"
         fi
     elif security find-identity -v -p codesigning | grep -Fq "\"$LOCAL_SIGNING_IDENTITY\""; then
-        SIGN_IDENTITY="$LOCAL_SIGNING_IDENTITY"
+        SIGN_IDENTITY="$(security find-identity -v -p codesigning | awk -v name="$LOCAL_SIGNING_IDENTITY" 'index($0, "\"" name "\"") { print $2; exit }')"
     else
         SIGN_IDENTITY="-"
     fi
 fi
+echo "Signing with identity: $SIGN_IDENTITY"
 KEYCHAIN_ARGS=()
 if [[ -n "$SIGN_KEYCHAIN" ]]; then
     KEYCHAIN_ARGS=(--keychain "$SIGN_KEYCHAIN")
