@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h:h}"
-VERSION="${APP_VERSION:-0.3.4}"
+VERSION="${APP_VERSION:-0.3.5}"
 APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 ZIP_PATH="$ROOT_DIR/outputs/Command-Whisper-$VERSION.zip"
 DMG_PATH="$ROOT_DIR/outputs/Command-Whisper-$VERSION.dmg"
@@ -14,6 +14,8 @@ ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$ZIP_PATH"
 rm -rf "$DMG_ROOT"
 mkdir -p "$DMG_ROOT"
 ditto "$APP_DIR" "$DMG_ROOT/Command Whisper.app"
+cp "$ROOT_DIR/scripts/install-release.command" "$DMG_ROOT/Install Command Whisper.command"
+chmod +x "$DMG_ROOT/Install Command Whisper.command"
 ln -s /Applications "$DMG_ROOT/Applications"
 hdiutil create -quiet -volname "Command Whisper $VERSION" -srcfolder "$DMG_ROOT" -ov -format UDZO "$DMG_PATH"
 
