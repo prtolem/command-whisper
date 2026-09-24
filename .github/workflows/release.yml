@@ -35,7 +35,7 @@ jobs:
           security unlock-keychain -p "$LOCAL_SIGNING_PASSWORD" "$KEYCHAIN_PATH"
           security import work/command-whisper-signing.p12 -f pkcs12 -k "$KEYCHAIN_PATH" -P "$LOCAL_SIGNING_PASSWORD" -T /usr/bin/codesign
           openssl pkcs12 -in work/command-whisper-signing.p12 -clcerts -nokeys -passin "pass:$LOCAL_SIGNING_PASSWORD" -out work/command-whisper-signing.crt
-          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" work/command-whisper-signing.crt
+          sudo security add-trusted-cert -d -r trustRoot -p codeSign -k /Library/Keychains/System.keychain work/command-whisper-signing.crt
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$LOCAL_SIGNING_PASSWORD" "$KEYCHAIN_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
