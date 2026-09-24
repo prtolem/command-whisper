@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>ru</string>
+    <key>CFBundleExecutable</key>
+    <string>CommandWhisper</string>
+    <key>CFBundleIdentifier</key>
+    <string>ru.prtolem.CommandWhisper</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Command Whisper</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.3.0</string>
+    <key>CFBundleVersion</key>
+    <string>3</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Command Whisper использует микрофон только пока удерживается правый Command.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Command Whisper превращает речь в текст локально на этом Mac.</string>
+    <key>SUFeedURL</key>
+    <string>https://prtolem.github.io/command-whisper/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>xRXnK4ptpUA+EaBWWJmBZmVcd/M2lcpEQ7XndH6j2LY=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>21600</integer>
+</dict>
+</plist>

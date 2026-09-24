@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: command-whisper-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        run: |
+          echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "APP_BUILD=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+
+      - name: Test and package
+        run: |
+          ./scripts/test.sh
+          ./scripts/package-release.sh
+
+      - name: Build signed Sparkle feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p public
+          cp "outputs/Command-Whisper-${APP_VERSION}.zip" public/
+          printf '# Command Whisper %s\n\nАвтоматическая сборка стабильного релиза.\n' "$APP_VERSION" > "public/Command-Whisper-${APP_VERSION}.md"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | work/Sparkle-2.10.0/bin/generate_appcast \
+            --ed-key-file - \
+            --download-url-prefix "https://prtolem.github.io/command-whisper" \
+            --embed-release-notes \
+            public
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload update channel
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy update channel
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "outputs/Command-Whisper-${APP_VERSION}.zip" \
+            "outputs/Command-Whisper-${APP_VERSION}.dmg" \
+            --title "Command Whisper ${APP_VERSION}" \
+            --generate-notes
