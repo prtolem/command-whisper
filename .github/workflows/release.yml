@@ -6,8 +6,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: command-whisper-release
@@ -16,9 +14,6 @@ concurrency:
 jobs:
   release:
     runs-on: macos-15
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
 
@@ -33,14 +28,16 @@ jobs:
           LOCAL_SIGNING_PASSWORD: ${{ secrets.LOCAL_SIGNING_PASSWORD }}
         run: |
           mkdir -p work
-          printf '%s' "$LOCAL_SIGNING_P12" | base64 --decode > work/command-whisper-signing.p12
+          KEYCHAIN_PATH="$GITHUB_WORKSPACE/work/cw-build.keychain-db"
+          printf '%s' "$LOCAL_SIGNING_P12" | /usr/bin/base64 -D > work/command-whisper-signing.p12
           printf '%s' "$LOCAL_SIGNING_PASSWORD" > work/command-whisper-signing-password
-          security create-keychain -p "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
-          security unlock-keychain -p "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
-          security import work/command-whisper-signing.p12 -f pkcs12 -k work/cw-build.keychain-db -P "$LOCAL_SIGNING_PASSWORD" -T /usr/bin/codesign
+          security create-keychain -p "$LOCAL_SIGNING_PASSWORD" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$LOCAL_SIGNING_PASSWORD" "$KEYCHAIN_PATH"
+          security import work/command-whisper-signing.p12 -f pkcs12 -k "$KEYCHAIN_PATH" -P "$LOCAL_SIGNING_PASSWORD" -T /usr/bin/codesign
           openssl pkcs12 -in work/command-whisper-signing.p12 -clcerts -nokeys -passin "pass:$LOCAL_SIGNING_PASSWORD" -out work/command-whisper-signing.crt
-          security add-trusted-cert -r trustRoot -p codeSign -k work/cw-build.keychain-db work/command-whisper-signing.crt
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$LOCAL_SIGNING_PASSWORD" work/cw-build.keychain-db
+          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" work/command-whisper-signing.crt
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$LOCAL_SIGNING_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Test and package
         run: |
@@ -51,26 +48,14 @@ jobs:
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
-          mkdir -p public
-          cp "outputs/Command-Whisper-${APP_VERSION}.zip" public/
-          printf '# Command Whisper %s\n\nАвтоматическая сборка стабильного релиза.\n' "$APP_VERSION" > "public/Command-Whisper-${APP_VERSION}.md"
+          mkdir -p feed
+          cp "outputs/Command-Whisper-${APP_VERSION}.zip" feed/
+          printf '# Command Whisper %s\n\nАвтоматическая сборка стабильного релиза.\n' "$APP_VERSION" > "feed/Command-Whisper-${APP_VERSION}.md"
           printf '%s' "$SPARKLE_PRIVATE_KEY" | work/Sparkle-2.10.0/bin/generate_appcast \
             --ed-key-file - \
-            --download-url-prefix "https://prtolem.github.io/command-whisper" \
+            --download-url-prefix "https://github.com/prtolem/command-whisper/releases/download/${GITHUB_REF_NAME}" \
             --embed-release-notes \
-            public
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload update channel
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: public
-
-      - name: Deploy update channel
-        id: deployment
-        uses: actions/deploy-pages@v4
+            feed
 
       - name: Create GitHub release
         env:
@@ -79,5 +64,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "outputs/Command-Whisper-${APP_VERSION}.zip" \
             "outputs/Command-Whisper-${APP_VERSION}.dmg" \
+            "feed/appcast.xml" \
             --title "Command Whisper ${APP_VERSION}" \
             --generate-notes

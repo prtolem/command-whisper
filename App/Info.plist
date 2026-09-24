@@ -29,7 +29,7 @@
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>Command Whisper превращает речь в текст локально на этом Mac.</string>
     <key>SUFeedURL</key>
-    <string>https://prtolem.github.io/command-whisper/appcast.xml</string>
+    <string>https://github.com/prtolem/command-whisper/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>xRXnK4ptpUA+EaBWWJmBZmVcd/M2lcpEQ7XndH6j2LY=</string>
     <key>SUEnableAutomaticChecks</key>
