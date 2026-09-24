@@ -55,7 +55,7 @@ jobs:
           printf '# Command Whisper %s\n\nАвтоматическая сборка стабильного релиза.\n' "$APP_VERSION" > "feed/Command-Whisper-${APP_VERSION}.md"
           printf '%s' "$SPARKLE_PRIVATE_KEY" | work/Sparkle-2.10.0/bin/generate_appcast \
             --ed-key-file - \
-            --download-url-prefix "https://github.com/prtolem/command-whisper/releases/download/${GITHUB_REF_NAME}" \
+            --download-url-prefix "https://github.com/prtolem/command-whisper/releases/download/${GITHUB_REF_NAME}/" \
             --embed-release-notes \
             feed
 
