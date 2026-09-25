@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="${0:A:h:h}"
-VERSION="${APP_VERSION:-0.3.7}"
+VERSION="${APP_VERSION:-0.3.8}"
 APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 ZIP_PATH="$ROOT_DIR/outputs/Command-Whisper-$VERSION.zip"
 DMG_PATH="$ROOT_DIR/outputs/Command-Whisper-$VERSION.dmg"
