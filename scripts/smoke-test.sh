@@ -8,4 +8,5 @@ APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 "$ROOT_DIR/scripts/build-app.sh"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 plutil -lint "$APP_DIR/Contents/Info.plist"
+otool -l "$APP_DIR/Contents/MacOS/CommandWhisper" | grep -F __info_plist >/dev/null
 "$APP_DIR/Contents/MacOS/CommandWhisper" --self-test

@@ -5,12 +5,16 @@ ROOT_DIR="${0:A:h:h}"
 APP_DIR="$ROOT_DIR/outputs/Command Whisper.app"
 BUILD_DIR="$ROOT_DIR/work/build"
 SPARKLE_DIR="$($ROOT_DIR/scripts/fetch-sparkle.sh)"
-APP_VERSION="${APP_VERSION:-0.3.6}"
-APP_BUILD="${APP_BUILD:-9}"
+APP_VERSION="${APP_VERSION:-0.3.7}"
+APP_BUILD="${APP_BUILD:-10}"
+BUILD_INFO_PLIST="$BUILD_DIR/Info.plist"
 
 cd "$ROOT_DIR"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$ROOT_DIR/work/module-cache"
+cp "$ROOT_DIR/App/Info.plist" "$BUILD_INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$BUILD_INFO_PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$BUILD_INFO_PLIST"
 clang -fobjc-arc -fmodules -fmodules-cache-path="$ROOT_DIR/work/module-cache" -fblocks -O2 -mmacosx-version-min=13.0 \
     -arch arm64 -arch x86_64 \
     -framework Cocoa \
@@ -21,6 +25,7 @@ clang -fobjc-arc -fmodules -fmodules-cache-path="$ROOT_DIR/work/module-cache" -f
     -F "$SPARKLE_DIR" \
     -framework Sparkle \
     -Wl,-rpath,@executable_path/../Frameworks \
+    -Wl,-sectcreate,__TEXT,__info_plist,"$BUILD_INFO_PLIST" \
     -I "$ROOT_DIR/Sources/CommandWhisper" \
     "$ROOT_DIR/Sources/CommandWhisper/main.m" \
     "$ROOT_DIR/Sources/CommandWhisper/TextCleaner.m" \
@@ -28,10 +33,8 @@ clang -fobjc-arc -fmodules -fmodules-cache-path="$ROOT_DIR/work/module-cache" -f
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Frameworks"
 cp "$BUILD_DIR/CommandWhisper" "$APP_DIR/Contents/MacOS/CommandWhisper"
-cp "$ROOT_DIR/App/Info.plist" "$APP_DIR/Contents/Info.plist"
+cp "$BUILD_INFO_PLIST" "$APP_DIR/Contents/Info.plist"
 ditto "$SPARKLE_DIR/Sparkle.framework" "$APP_DIR/Contents/Frameworks/Sparkle.framework"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$APP_DIR/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$APP_DIR/Contents/Info.plist"
 
 LOCAL_SIGNING_IDENTITY="Command Whisper Local Signing"
 LOCAL_KEYCHAIN="$ROOT_DIR/work/cw-build.keychain-db"
